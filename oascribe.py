@@ -2,7 +2,7 @@ import sys
 import os
 import json
 import click
-from tools import load_openapi_spec, load_endpoints_filter, generate_markdown
+from .tools import load_openapi_spec, load_endpoints_filter, generate_markdown
 
 @click.group()
 def cli():
