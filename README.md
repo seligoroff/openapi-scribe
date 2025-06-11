@@ -145,8 +145,8 @@ python oascribe.py generate-md \
 ├── oascribe.py # Основной CLI-интерфейс
 ├── README.md   # Документация
 ├── requirements.txt # Зависимости
-└── tools       # Пакет с модулями утилит
-    ├── __init__.py # Инициализация пакета tools
+└── oatools       # Пакет с модулями утилит
+    ├── __init__.py # Инициализация пакета oatools
     ├── markdown_generator.py   # Генератор Markdown
     └── utils.py    # Вспомогательные утилиты
 
