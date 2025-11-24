@@ -1,0 +1,23 @@
+{% if parameters %}
+| Имя | Тип | Расположение | Обязательный | Описание |  Формат |
+|-----|-----|--------------|--------------|----------|--------|
+{% for param in parameters -%}
+| `{{ param.name }}` | {{ param.type }} | {{ param.in }} | {{ param.required }} | {{ param.description | safe_replace }}| {{ param.format }}|
+{% endfor -%}
+
+
+#### Примеры параметров
+{% for param in parameters -%}
+
+**{{param.name}}**
+{% if param.examples | length > 0 %}
+
+{% include 'endpoint_parameter_example.md.j2' %} 
+{% else %}
+⚠️ *Пример отсутсвует*
+{% endif %}
+
+{% endfor -%}
+
+
+{% endif %}

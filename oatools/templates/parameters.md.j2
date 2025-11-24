@@ -1,7 +1,0 @@
-{% if parameters %}
-| Имя | Тип | Расположение | Обязательный | Описание | Примеры | Формат |
-|-----|-----|--------------|--------------|----------|---------|--------|
-{% for param in parameters %}
-| `{{ param.name }}` | {{ param.type }} | {{ param.in }} | {{ param.required }} | {{ param.description }} | {{ param.examples }} | {{ param.format }} |
-{% endfor %}
-{% endif %}

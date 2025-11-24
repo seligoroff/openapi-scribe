@@ -1,0 +1,29 @@
+**Тело запроса:**  
+{% if body.description %}**Описание:** {{ body.description }}  {% endif %}
+
+{% for content in body.content %}
+- **Тип контента:** `{{ content.content_type }}`  
+  {% if content.schema_ref %}
+  - **Схема:** [{{ content.schema_title or content.schema_ref }}](#{{ content.schema_ref.lower() }})
+  {% elif content.schema_type %}
+  - **Тип:** {{ content.schema_type }}
+  {% endif %}
+
+  {% if content.properties %}
+  **Свойства:**
+  {# Пустая строка перед таблицей необходима для правильного распознавания таблиц pandoc при конвертации в RTF/DOCX #}
+
+  | Имя | Тип | Обязательный | Описание | Примеры | Формат |
+  |-----|-----|--------------|----------|---------|--------|
+  {% for prop in content.properties %}
+  | `{{ prop.name }}` | {{ prop.type }} | {{ prop.required }} | {{ prop.description }} | {% for example in prop.examples %}**{{ example[0] }}:** `{{ example[1] | format_example(30) }}`{% if not loop.last %}<br>{% endif %}{% else %} {% endfor %}| {{ prop.format }} |
+  {% endfor %}
+  {% endif %}
+
+  {% for example in content.examples %}
+  - **Пример ({{ example[0] }}):**  
+    ```json
+    {{ example[1] | format_example(200) }}
+    ```
+  {% endfor %}
+{% endfor %}

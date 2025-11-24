@@ -7,6 +7,8 @@
 - Поиск информации по эндпоинтам и схемам данных
 - Генерация Markdown документации
 - Фильтрация эндпоинтов
+- Группировка эндпоинтов по тегам
+- Вывод краткого описания (summary) эндпоинтов
 - Поддержка рекурсивного вывода зависимых схем
 - Форматирование примеров и таблиц параметров
 - Обработка `$ref` и комбинаторов схем (anyOf/oneOf/allOf)
@@ -32,7 +34,7 @@ pip install -r requirements.txt
 ### Основные команды
 
 ```bash 
-python oascribe.py [COMMAND] [OPTIONS]
+python cli.py [COMMAND] [OPTIONS]
 
 ```
 
@@ -40,13 +42,13 @@ python oascribe.py [COMMAND] [OPTIONS]
 |---------|----------|
 |endpoint|	Информация о конкретном эндпоинте|
 |schema|	Поиск схемы данных по имени|
-|list|	Список всех эндпоинтов API|
+|list|	Список всех эндпоинтов API (с опциями --summary, --group-by-tags)|
 |generate-md|	Генерация Markdown документации|
 
 #### 1. Поиск информации об эндпоинте
 
 ```bash
-python oascribe.py endpoint \
+python cli.py endpoint \
   -s path/to/openapi.json \
   -p /api/v1/users \
   -m get
@@ -66,7 +68,7 @@ python oascribe.py endpoint \
 #### 2. Поиск информации о схеме
 
 ```bash
-python oascribe.py schema \
+python cli.py schema \
   -s path/to/openapi.json \
   -n UserSchema
 
@@ -81,23 +83,42 @@ python oascribe.py schema \
 #### 3. Список всех эндпоинтов
 
 ```bash
-python oascribe.py list \
+python cli.py list \
   -s path/to/openapi.json \
-  -o endpoints.txt
+  -o endpoints.txt \
+  --summary \
+  --group-by-tags
 
 ```
 
 **Опции:**
 
 - --spec/-s: Путь к OpenAPI файлу (обязательно)
-
 - --output/-o: Файл для сохранения (опционально)
+- --summary: Показать краткое описание (summary) для каждого эндпоинта
+- --group-by-tags: Группировать эндпоинты по тегам
+
+**Примеры:**
+
+```bash
+# Простой список
+python cli.py list -s spec.json
+
+# С кратким описанием
+python cli.py list -s spec.json --summary
+
+# Группировка по тегам
+python cli.py list -s spec.json --group-by-tags
+
+# Группировка с описанием
+python cli.py list -s spec.json --group-by-tags --summary
+```
 
 #### 4. Генерация Markdown документации
 
 ```bash
 
-python oascribe.py generate-md \
+python cli.py generate-md \
   -s path/to/openapi.json \
   -e endpoints.txt \
   -o documentation.md \
@@ -130,7 +151,7 @@ POST /api/v1/posts
 
 ```bash
 
-python oascribe.py generate-md \
+python cli.py generate-md \
   -s spec/openapi.json \
   -e endpoints.txt \
   -o filtered_docs.md
@@ -142,13 +163,34 @@ python oascribe.py generate-md \
 ```bash
 
 .
-├── oascribe.py # Основной CLI-интерфейс
-├── README.md   # Документация
-├── requirements.txt # Зависимости
-└── oatools       # Пакет с модулями утилит
-    ├── __init__.py # Инициализация пакета oatools
-    ├── markdown_generator.py   # Генератор Markdown
-    └── utils.py    # Вспомогательные утилиты
+├── cli.py                    # Основной CLI-интерфейс
+├── README.md                 # Документация
+├── requirements.txt          # Зависимости
+├── pytest.ini               # Конфигурация pytest
+├── .coveragerc              # Конфигурация coverage
+├── domain/                  # Доменный слой (бизнес-логика)
+│   ├── models.py           # Value objects (OpenAPISpec, Endpoint, Schema)
+│   └── services.py         # Доменные сервисы (EndpointFinder, SchemaResolver)
+├── ports/                   # Интерфейсы (порты)
+│   └── spec_loader.py      # SpecLoader (ABC)
+├── adapters/                # Реализации портов
+│   └── input/              # Входящие адаптеры
+│       ├── file_spec_loader.py
+│       └── endpoints_filter_loader.py
+├── application/             # Use cases (бизнес-операции)
+│   └── use_cases/
+│       ├── get_endpoint_info.py
+│       ├── get_schema_info.py
+│       ├── list_endpoints.py
+│       └── generate_documentation.py
+├── rendering/               # Рендеринг документации
+│   ├── formatters.py       # Форматтеры (TypeFormatter, ExampleFormatter)
+│   ├── markdown.py         # MarkdownGenerator
+│   └── templates/          # Jinja2 шаблоны
+└── tests/                   # Тесты
+    ├── conftest.py
+    ├── fixtures/
+    └── test_*.py
 
 
 ```

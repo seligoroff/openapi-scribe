@@ -1,0 +1,30 @@
+### `{{ endpoint.method }}` {{ endpoint.path }}
+*Tag: {{tag}}*
+
+{% if endpoint.details.get('deprecated', False) %}
+> ⚠️ **Устарел**
+{% endif %}
+
+{% if 'operationId' in endpoint.details %}
+*ID операции:* `{{ endpoint.details.operationId }}`  
+{% endif %}
+
+{% set summary = endpoint.details.get('summary', '') %}
+{% set description = endpoint.details.get('description', '') %}
+{% if summary %}
+*Краткое описание:* {{ summary }}  
+{% endif %}
+
+{% if description %}
+*Расширенное описание:* {{ description }}
+{% endif %}
+
+{{ endpoint.security }}
+
+{{ endpoint.parameters_table }}
+
+{{ endpoint.request_body }}
+
+{{ endpoint.responses }}
+
+---

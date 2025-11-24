@@ -1,3 +1,0 @@
-{% for example in param.examples %}
-**{{ example[0] }}:** `{{ example[1] | format_example(50) }}`{% if not loop.last %}<br>{% endif %}
-{% endfor %}
