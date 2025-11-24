@@ -1,2 +1,8 @@
 .spyproject
 __pycache__
+
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+*.cover
