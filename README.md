@@ -1,5 +1,15 @@
 # OpenAPI Scribe 🖋️
 
+![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Click](https://img.shields.io/badge/click-8.1+-green.svg)
+![Jinja2](https://img.shields.io/badge/jinja2-3.1+-orange.svg)
+![OpenAPI](https://img.shields.io/badge/OpenAPI-3.0+-brightgreen.svg)
+![pytest](https://img.shields.io/badge/pytest-7.0+-purple.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+![Tests](https://img.shields.io/badge/tests-162%20passed-success)
+![Coverage](https://img.shields.io/badge/coverage-87%25-brightgreen)
+
 Утилита для работы с OpenAPI спецификациями: извлечение информации, генерация документации и анализ схем
 
 ## Особенности ✨
