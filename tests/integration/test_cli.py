@@ -125,6 +125,81 @@ class TestSchemaCommand:
         
         assert result.exit_code == 0
         assert "UserRole" in result.output
+    
+    def test_schema_command_list(self, sample_spec_path):
+        """Тест вывода списка всех схем"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['schema', '--spec', sample_spec_path, '--list']
+        )
+        
+        assert result.exit_code == 0
+        assert "Доступные схемы" in result.output
+        assert "User" in result.output
+        assert "UserRole" in result.output
+        assert "Error" in result.output
+        # Проверяем что схемы отсортированы
+        output_lines = result.output.split('\n')
+        schema_lines = [line for line in output_lines if line.strip().startswith('- ')]
+        assert len(schema_lines) > 0
+        # Проверяем формат вывода
+        assert any("Доступные схемы (" in line for line in output_lines)
+    
+    def test_schema_command_list_short_flag(self, sample_spec_path):
+        """Тест вывода списка всех схем с коротким флагом -l"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['schema', '--spec', sample_spec_path, '-l']
+        )
+        
+        assert result.exit_code == 0
+        assert "Доступные схемы" in result.output
+        assert "User" in result.output
+    
+    def test_schema_command_list_minimal_spec(self, minimal_spec_path):
+        """Тест вывода списка схем для минимальной спецификации"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['schema', '--spec', minimal_spec_path, '--list']
+        )
+        
+        assert result.exit_code == 0
+        assert "Доступные схемы" in result.output
+        # Минимальная спецификация содержит TestResponse
+        assert "TestResponse" in result.output
+    
+    def test_schema_command_list_empty_spec(self, tmp_path):
+        """Тест вывода списка схем для спецификации без схем"""
+        # Создаем временную спецификацию без схем
+        empty_spec = tmp_path / "empty_spec.json"
+        empty_spec.write_text(
+            '{"openapi": "3.0.0", "info": {"title": "Test", "version": "1.0.0"}, "paths": {}, "components": {}}',
+            encoding='utf-8'
+        )
+        
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['schema', '--spec', str(empty_spec), '--list']
+        )
+        
+        assert result.exit_code == 0
+        assert "не найдено ни одной схемы" in result.output.lower() or "no schemas" in result.output.lower()
+    
+    def test_schema_command_no_name_no_list(self, sample_spec_path):
+        """Тест ошибки когда не указаны ни --name, ни --list"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['schema', '--spec', sample_spec_path]
+        )
+        
+        assert result.exit_code == 1
+        assert "необходимо указать" in result.output.lower() or "must specify" in result.output.lower()
+        assert "--name" in result.output or "--list" in result.output or "-n" in result.output or "-l" in result.output
 
 
 @pytest.mark.integration

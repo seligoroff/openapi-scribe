@@ -103,17 +103,37 @@ def find_endpoint_info(spec, path, method, expand_schemas):
 
 @cli.command(name='schema')
 @click.option('--spec', '-s', required=True, help='Путь к файлу openapi.json')
-@click.option('--name', '-n', required=True, help='Имя схемы для поиска')
-def find_schema_info(spec, name):
-    """Находит определение схемы в OpenAPI спецификации"""
+@click.option('--name', '-n', help='Имя схемы для поиска')
+@click.option('--list', '-l', 'list_schemas', is_flag=True, help='Показать список всех доступных схем')
+def find_schema_info(spec, name, list_schemas):
+    """Находит определение схемы в OpenAPI спецификации или выводит список всех схем"""
     try:
+        # Загружаем спецификацию
+        spec_obj = _spec_loader.load(spec)
+        
+        # Если указан --list, выводим список всех схем
+        if list_schemas:
+            available_schemas = sorted(spec_obj.schemas.keys())
+            if not available_schemas:
+                click.echo("В спецификации не найдено ни одной схемы.")
+                return
+            
+            click.echo(f"\nДоступные схемы ({len(available_schemas)}):")
+            for schema_name in available_schemas:
+                click.echo(f"  - {schema_name}")
+            return
+        
+        # Если не указан --name, показываем ошибку
+        if not name:
+            click.echo("Ошибка: необходимо указать либо --name/-n для поиска схемы, либо --list/-l для списка всех схем.", err=True)
+            sys.exit(1)
+        
         # Использование use case для поиска схемы
         schema = _schema_use_case.execute(spec, name)
         
         if not schema:
             # Формируем список доступных схем для сообщения об ошибке
-            spec_obj = _spec_loader.load(spec)
-            available_schemas = list(spec_obj.schemas.keys())
+            available_schemas = sorted(spec_obj.schemas.keys())
             raise ValueError(
                 f"Схема '{name}' не найдена. Доступные схемы: {', '.join(available_schemas)}"
             )
