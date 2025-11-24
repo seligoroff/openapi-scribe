@@ -52,6 +52,7 @@ python cli.py [COMMAND] [OPTIONS]
 |endpoint|	Информация о конкретном эндпоинте|
 |schema|	Поиск схемы данных по имени или список всех схем (--list)|
 |list|	Список всех эндпоинтов API (с опциями --summary, --group-by-tags, --stats)|
+|errors-report|	Отчет по эндпоинтам с кодами ошибок (4xx, 5xx)|
 |generate-md|	Генерация Markdown документации|
 
 #### 1. Поиск информации об эндпоинте
@@ -141,7 +142,47 @@ python cli.py list -s spec.json --stats
 python cli.py list -s spec.json --stats --group-by-tags
 ```
 
-#### 4. Генерация Markdown документации
+#### 4. Отчет по кодам ошибок эндпоинтов
+
+```bash
+python cli.py errors-report \
+  -s path/to/openapi.json \
+  -o report.txt \
+  --format text
+```
+
+**Опции:**
+
+- --spec/-s: Путь к OpenAPI файлу (обязательно)
+- --output/-o: Файл для сохранения отчета (опционально)
+- --format/-f: Формат отчета (text, csv или md, по умолчанию: text)
+
+**Примеры:**
+
+```bash
+# Текстовый отчет в консоль
+python cli.py errors-report -s spec.json
+
+# Сохранение отчета в файл
+python cli.py errors-report -s spec.json -o errors_report.txt
+
+# CSV формат
+python cli.py errors-report -s spec.json --format csv -o errors_report.csv
+
+# Markdown формат
+python cli.py errors-report -s spec.json --format md -o errors_report.md
+```
+
+**Описание:**
+
+Команда генерирует отчет, который для каждого эндпоинта показывает:
+- Путь эндпоинта
+- HTTP метод
+- Коды ошибок (4xx, 5xx) из секции `responses`
+
+Удобно для сверки с кодом и проверки документации ошибок.
+
+#### 5. Генерация Markdown документации
 
 ```bash
 

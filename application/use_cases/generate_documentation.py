@@ -1,9 +1,9 @@
 """Use case для генерации Markdown документации"""
 from typing import Optional
 from ports.spec_loader import SpecLoader
+from ports.endpoints_filter_loader import EndpointsFilterLoader
 from domain.models import EndpointFilter
 from rendering.markdown import MarkdownGenerator
-from adapters.input.endpoints_filter_loader import load_endpoints_filter
 
 
 class GenerateDocumentationUseCase:
@@ -13,14 +13,16 @@ class GenerateDocumentationUseCase:
     Координирует работу SpecLoader и MarkdownGenerator для генерации документации.
     """
     
-    def __init__(self, spec_loader: SpecLoader):
+    def __init__(self, spec_loader: SpecLoader, filter_loader: Optional[EndpointsFilterLoader] = None):
         """
         Инициализирует use case.
         
         Args:
             spec_loader: Адаптер для загрузки спецификаций
+            filter_loader: Адаптер для загрузки фильтров эндпоинтов (опционально)
         """
         self.spec_loader = spec_loader
+        self.filter_loader = filter_loader
         self.markdown_generator = MarkdownGenerator()
     
     def execute(
@@ -49,9 +51,9 @@ class GenerateDocumentationUseCase:
         
         # Загрузка фильтра эндпоинтов
         endpoint_filter: Optional[EndpointFilter] = None
-        if endpoints_filter:
+        if endpoints_filter and self.filter_loader:
             try:
-                filter_set = load_endpoints_filter(endpoints_filter)
+                filter_set = self.filter_loader.load(endpoints_filter)
                 endpoint_filter = EndpointFilter.from_set(filter_set)
             except FileNotFoundError:
                 # Если файл фильтра не найден, продолжаем без фильтра

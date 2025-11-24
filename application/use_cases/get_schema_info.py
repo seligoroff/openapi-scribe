@@ -1,5 +1,5 @@
 """Use case для получения информации о схеме"""
-from typing import Optional
+from typing import Optional, List
 from ports.spec_loader import SpecLoader
 from domain.models import Schema
 
@@ -46,4 +46,24 @@ class GetSchemaInfoUseCase:
             return None
         
         return Schema(name=schema_name, definition=schema_definition)
+    
+    def list_all(self, spec_source: str) -> List[str]:
+        """
+        Возвращает список всех доступных схем в спецификации.
+        
+        Args:
+            spec_source: Путь к файлу спецификации
+            
+        Returns:
+            Отсортированный список имен схем
+            
+        Raises:
+            FileNotFoundError: Если файл спецификации не найден
+            IOError: Если произошла ошибка при чтении файла
+        """
+        # Загрузка спецификации
+        spec = self.spec_loader.load(spec_source)
+        
+        # Возвращаем отсортированный список имен схем
+        return sorted(spec.schemas.keys())
 

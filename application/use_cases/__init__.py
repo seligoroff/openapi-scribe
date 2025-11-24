@@ -4,6 +4,7 @@ from .get_schema_info import GetSchemaInfoUseCase
 from .list_endpoints import ListEndpointsUseCase
 from .generate_documentation import GenerateDocumentationUseCase
 from .verify_documentation import VerifyDocumentationUseCase
+from .errors_report import ErrorsReportUseCase
 
 __all__ = [
     'GetEndpointInfoUseCase',
@@ -11,4 +12,5 @@ __all__ = [
     'ListEndpointsUseCase',
     'GenerateDocumentationUseCase',
     'VerifyDocumentationUseCase',
+    'ErrorsReportUseCase',
 ]

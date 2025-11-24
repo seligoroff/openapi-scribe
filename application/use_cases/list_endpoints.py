@@ -3,6 +3,7 @@ from typing import List
 from ports.spec_loader import SpecLoader
 from domain.models import Endpoint
 from domain.services import EndpointFinder
+from rendering.formatters import StatsFormatter
 
 
 class ListEndpointsUseCase:
@@ -41,4 +42,17 @@ class ListEndpointsUseCase:
         
         # Получение списка эндпоинтов
         return self.finder.list_all(spec)
+    
+    def get_stats(self, endpoints: List[Endpoint]) -> str:
+        """
+        Вычисляет и форматирует статистику по эндпоинтам.
+        
+        Args:
+            endpoints: Список эндпоинтов для анализа
+            
+        Returns:
+            Отформатированная строка со статистикой
+        """
+        stats_data = StatsFormatter.calculate_stats(endpoints)
+        return StatsFormatter.format(stats_data)
 

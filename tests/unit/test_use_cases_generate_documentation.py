@@ -2,8 +2,9 @@
 import pytest
 from unittest.mock import Mock, patch
 from application.use_cases.generate_documentation import GenerateDocumentationUseCase
-from domain.models import OpenAPISpec
+from domain.models import OpenAPISpec, EndpointFilter
 from ports.spec_loader import SpecLoader
+from ports.endpoints_filter_loader import EndpointsFilterLoader
 
 
 @pytest.mark.unit
@@ -34,12 +35,16 @@ class TestGenerateDocumentationUseCase:
         spec_obj = OpenAPISpec.from_dict(sample_openapi_spec)
         mock_loader.load.return_value = spec_obj
         
+        mock_filter_loader = Mock(spec=EndpointsFilterLoader)
+        filter_set = {("GET", "/api/v1/users"), ("POST", "/api/v1/posts")}
+        mock_filter_loader.load.return_value = filter_set
+        
         with patch('application.use_cases.generate_documentation.MarkdownGenerator') as MockGenerator:
             mock_gen_instance = Mock()
             mock_gen_instance.generate.return_value = "# Filtered Documentation"
             MockGenerator.return_value = mock_gen_instance
             
-            use_case = GenerateDocumentationUseCase(mock_loader)
+            use_case = GenerateDocumentationUseCase(mock_loader, mock_filter_loader)
             result = use_case.execute("test.json", endpoints_filter=endpoints_filter_file)
             
             assert result == "# Filtered Documentation"
@@ -47,6 +52,8 @@ class TestGenerateDocumentationUseCase:
             # Проверяем, что фильтр был передан
             call_args = mock_gen_instance.generate.call_args
             assert call_args[1]['endpoints_filter'] is not None
+            # Проверяем, что filter_loader был вызван
+            mock_filter_loader.load.assert_called_once_with(endpoints_filter_file)
     
     def test_execute_with_all_schemas(self, sample_openapi_spec):
         """Тест выполнения с включением всех схем"""
@@ -73,12 +80,15 @@ class TestGenerateDocumentationUseCase:
         spec_obj = OpenAPISpec.from_dict(sample_openapi_spec)
         mock_loader.load.return_value = spec_obj
         
+        mock_filter_loader = Mock(spec=EndpointsFilterLoader)
+        mock_filter_loader.load.side_effect = FileNotFoundError("Файл не найден")
+        
         with patch('application.use_cases.generate_documentation.MarkdownGenerator') as MockGenerator:
             mock_gen_instance = Mock()
             mock_gen_instance.generate.return_value = "# Documentation"
             MockGenerator.return_value = mock_gen_instance
             
-            use_case = GenerateDocumentationUseCase(mock_loader)
+            use_case = GenerateDocumentationUseCase(mock_loader, mock_filter_loader)
             # Передаем несуществующий файл фильтра
             result = use_case.execute("test.json", endpoints_filter="/nonexistent/filter.txt")
             

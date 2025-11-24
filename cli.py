@@ -5,23 +5,25 @@ import json
 import click
 from io import BytesIO
 from adapters.input.file_spec_loader import FileSpecLoader
+from adapters.input.endpoints_filter_loader import FileEndpointsFilterLoader
 from application.use_cases import (
     GetEndpointInfoUseCase,
     GetSchemaInfoUseCase,
     ListEndpointsUseCase,
     GenerateDocumentationUseCase,
-    VerifyDocumentationUseCase
+    VerifyDocumentationUseCase,
+    ErrorsReportUseCase
 )
-from domain.services import SchemaResolver
-from rendering.formatters import StatsFormatter
 
 # Инициализация зависимостей
 _spec_loader = FileSpecLoader()
+_filter_loader = FileEndpointsFilterLoader()
 _endpoint_use_case = GetEndpointInfoUseCase(_spec_loader)
 _schema_use_case = GetSchemaInfoUseCase(_spec_loader)
 _list_use_case = ListEndpointsUseCase(_spec_loader)
-_generate_use_case = GenerateDocumentationUseCase(_spec_loader)
+_generate_use_case = GenerateDocumentationUseCase(_spec_loader, _filter_loader)
 _verify_use_case = VerifyDocumentationUseCase(_spec_loader)
+_errors_report_use_case = ErrorsReportUseCase(_spec_loader)
 
 
 @click.group()
@@ -51,49 +53,15 @@ def find_endpoint_info(spec, path, method, expand_schemas):
 
         # Рекурсивный вывод схем
         if expand_schemas:
-            # Загружаем спецификацию для SchemaResolver
-            spec_obj = _spec_loader.load(spec)
-            resolver = SchemaResolver(spec_obj)
-            visited_schemas = set()
+            related_schemas = _endpoint_use_case.get_related_schemas(spec, endpoint)
             
-            def find_and_print_schemas(node):
-                if isinstance(node, dict):
-                    # Обработка ссылок
-                    if '$ref' in node:
-                        ref = node['$ref']
-                        if ref.startswith('#/components/schemas/'):
-                            schema_name = ref.split('/')[-1]
-                            if schema_name not in visited_schemas:
-                                visited_schemas.add(schema_name)
-                                resolved_schema = resolver.resolve(ref)
-                                if resolved_schema:
-                                    click.echo(f"\n### Схема: {schema_name}")
-                                    click.echo(json.dumps(resolved_schema, indent=2, ensure_ascii=False))
-                                    # Рекурсивный обход свойств схемы
-                                    find_and_print_schemas(resolved_schema)
-                    
-                    # Рекурсивный обход вложенных элементов
-                    for key, value in node.items():
-                        find_and_print_schemas(value)
-                
-                elif isinstance(node, list):
-                    for item in node:
-                        find_and_print_schemas(item)
-            
-            click.echo("\n\n### 🔍 Связанные схемы:")
-            # Поиск схем в параметрах
-            for param in endpoint.operation.get('parameters', []):
-                find_and_print_schemas(param)
-            
-            # Поиск схем в теле запроса
-            if 'requestBody' in endpoint.operation:
-                find_and_print_schemas(endpoint.operation['requestBody'])
-            
-            # Поиск схем в ответах
-            for response in endpoint.operation.get('responses', {}).values():
-                find_and_print_schemas(response)
-            
-            if not visited_schemas:
+            if related_schemas:
+                click.echo("\n\n### 🔍 Связанные схемы:")
+                for schema_info in related_schemas:
+                    click.echo(f"\n### Схема: {schema_info['name']}")
+                    click.echo(json.dumps(schema_info['definition'], indent=2, ensure_ascii=False))
+            else:
+                click.echo("\n\n### 🔍 Связанные схемы:")
                 click.echo("Связанные схемы не обнаружены")
         
     except Exception as e:
@@ -108,12 +76,9 @@ def find_endpoint_info(spec, path, method, expand_schemas):
 def find_schema_info(spec, name, list_schemas):
     """Находит определение схемы в OpenAPI спецификации или выводит список всех схем"""
     try:
-        # Загружаем спецификацию
-        spec_obj = _spec_loader.load(spec)
-        
         # Если указан --list, выводим список всех схем
         if list_schemas:
-            available_schemas = sorted(spec_obj.schemas.keys())
+            available_schemas = _schema_use_case.list_all(spec)
             if not available_schemas:
                 click.echo("В спецификации не найдено ни одной схемы.")
                 return
@@ -133,7 +98,7 @@ def find_schema_info(spec, name, list_schemas):
         
         if not schema:
             # Формируем список доступных схем для сообщения об ошибке
-            available_schemas = sorted(spec_obj.schemas.keys())
+            available_schemas = _schema_use_case.list_all(spec)
             raise ValueError(
                 f"Схема '{name}' не найдена. Доступные схемы: {', '.join(available_schemas)}"
             )
@@ -171,8 +136,7 @@ def list_endpoints(spec, output, summary, group_by_tags, stats):
         # Вычисление и вывод статистики (если запрошена)
         stats_text = ""
         if stats:
-            stats_data = StatsFormatter.calculate_stats(endpoints_list)
-            stats_text = StatsFormatter.format(stats_data)
+            stats_text = _list_use_case.get_stats(endpoints_list)
         
         # Если указан только --stats, выводим только статистику
         if stats and not summary and not group_by_tags:
@@ -435,6 +399,47 @@ def convert_with_mammoth(md_content, output_path):
         click.secho("\nПредупреждения Mammoth:", fg='yellow')
         for message in result.messages:
             click.echo(f"- {message.message}")
+
+
+@cli.command(name='errors-report')
+@click.option('--spec', '-s', required=True, help='Путь к файлу openapi.json')
+@click.option('--output', '-o', help='Путь для сохранения отчёта (опционально)')
+@click.option('--format', '-f', type=click.Choice(['text', 'csv', 'md'], case_sensitive=False), 
+              default='text', help='Формат отчета (text, csv или md)')
+def errors_report(spec, output, format):
+    """
+    Генерирует отчет по эндпоинтам с кодами ошибок.
+    
+    Для каждого эндпоинта выводит путь, метод и коды ошибок (4xx, 5xx) из responses.
+    Удобно для сверки с кодом и проверки документации ошибок.
+    
+    Примеры:
+    
+    \b
+      python cli.py errors-report -s spec.json
+      python cli.py errors-report -s spec.json -o report.txt
+      python cli.py errors-report -s spec.json --format csv -o report.csv
+      python cli.py errors-report -s spec.json --format md -o report.md
+    """
+    try:
+        # Генерация отчета через use case
+        report_data = _errors_report_use_case.execute(spec)
+        
+        # Форматирование отчета
+        formatted_report = _errors_report_use_case.format_report(report_data, format)
+        
+        # Вывод или сохранение
+        if output:
+            expanded_output = os.path.expanduser(output)
+            with open(expanded_output, 'w', encoding='utf-8') as f:
+                f.write(formatted_report)
+            click.echo(f"Отчет сохранен в: {expanded_output}")
+        else:
+            click.echo(formatted_report)
+    
+    except Exception as e:
+        click.echo(f"Ошибка: {str(e)}", err=True)
+        sys.exit(1)
 
 
 def convert_with_pandoc(md_content, output_path):

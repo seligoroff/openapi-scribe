@@ -444,6 +444,115 @@ class TestGenerateMdCommand:
 
 
 @pytest.mark.integration
+class TestErrorsReportCommand:
+    """Тесты для команды errors-report"""
+    
+    def test_errors_report_command_success(self, sample_spec_path):
+        """Тест успешной генерации отчета"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path]
+        )
+        
+        assert result.exit_code == 0
+        assert "Отчет по кодам ошибок эндпоинтов" in result.output
+        assert "Статистика:" in result.output
+        assert "Всего эндпоинтов:" in result.output
+    
+    def test_errors_report_command_with_output(self, sample_spec_path, tmp_path):
+        """Тест сохранения отчета в файл"""
+        output_file = tmp_path / "errors_report.txt"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path, '--output', str(output_file)]
+        )
+        
+        assert result.exit_code == 0
+        assert "Отчет сохранен" in result.output
+        assert output_file.exists()
+        content = output_file.read_text(encoding='utf-8')
+        assert "Отчет по кодам ошибок эндпоинтов" in content
+    
+    def test_errors_report_command_csv_format(self, sample_spec_path):
+        """Тест генерации отчета в CSV формате"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path, '--format', 'csv']
+        )
+        
+        assert result.exit_code == 0
+        assert "method,path,error_codes" in result.output
+    
+    def test_errors_report_command_csv_with_output(self, sample_spec_path, tmp_path):
+        """Тест сохранения CSV отчета в файл"""
+        output_file = tmp_path / "errors_report.csv"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path, '--format', 'csv', '--output', str(output_file)]
+        )
+        
+        assert result.exit_code == 0
+        assert output_file.exists()
+        content = output_file.read_text(encoding='utf-8')
+        assert "method,path,error_codes" in content
+        assert "GET," in content or "POST," in content
+    
+    def test_errors_report_command_minimal_spec(self, minimal_spec_path):
+        """Тест отчета для минимальной спецификации"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', minimal_spec_path]
+        )
+        
+        assert result.exit_code == 0
+        assert "Отчет по кодам ошибок эндпоинтов" in result.output
+    
+    def test_errors_report_command_markdown_format(self, sample_spec_path):
+        """Тест генерации отчета в Markdown формате"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path, '--format', 'md']
+        )
+        
+        assert result.exit_code == 0
+        assert "# Отчет по кодам ошибок эндпоинтов" in result.output
+        assert "## Эндпоинты с кодами ошибок" in result.output or "## Эндпоинты без кодов ошибок" in result.output
+        assert "## Статистика" in result.output
+    
+    def test_errors_report_command_markdown_with_output(self, sample_spec_path, tmp_path):
+        """Тест сохранения Markdown отчета в файл"""
+        output_file = tmp_path / "errors_report.md"
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', sample_spec_path, '--format', 'md', '--output', str(output_file)]
+        )
+        
+        assert result.exit_code == 0
+        assert output_file.exists()
+        content = output_file.read_text(encoding='utf-8')
+        assert "# Отчет по кодам ошибок эндпоинтов" in content
+        assert "## Статистика" in content
+    
+    def test_errors_report_command_file_not_found(self):
+        """Тест обработки ошибки когда файл не найден"""
+        runner = CliRunner()
+        result = runner.invoke(
+            cli,
+            ['errors-report', '--spec', '/nonexistent/file.json']
+        )
+        
+        assert result.exit_code == 1
+        assert "Ошибка" in result.output
+
+
+@pytest.mark.integration
 class TestCLIErrorHandling:
     """Тесты обработки ошибок CLI"""
     
