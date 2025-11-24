@@ -1,6 +1,7 @@
 import os
 import json
 from pathlib import Path
+import click
 
 def load_openapi_spec(spec_path):
     """Загружает и валидирует OpenAPI спецификацию"""
@@ -29,7 +30,7 @@ def load_endpoints_filter(file_path):
                             method, path = parts
                             endpoints.add((method.upper(), path))
                         else:
-                            print(f"⚠️ Пропущена некорректная строка: {line}")
+                            click.echo(f"⚠️ Пропущена некорректная строка: {line}", err=True)
     except FileNotFoundError:
         raise FileNotFoundError(f"Файл фильтра {file_path} не найден")
     return endpoints

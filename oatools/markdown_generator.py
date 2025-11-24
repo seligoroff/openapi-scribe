@@ -1,6 +1,27 @@
 import json
 from collections import defaultdict
 from .utils import process_schema, resolve_ref
+from jinja2 import Environment, FileSystemLoader
+import os
+
+# Инициализация Jinja2
+template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+env = Environment(
+    loader=FileSystemLoader(template_dir),
+    autoescape=False,
+    trim_blocks=True,
+    lstrip_blocks=True
+)
+
+# Регистрация кастомных фильтров
+env.filters['format_example'] = lambda ex, max_length=100: format_example(ex, max_length)
+env.filters['safe_replace'] = lambda s: safe_replace(s) if s else ""
+
+def safe_replace(s):
+    """Безопасная замена символов с защитой от None"""
+    if s is None:
+        return ""
+    return s.replace('\n', '<br>').replace('  - ', '<br>- ')
 
 def format_type(schema):
     """Улучшенное форматирование типов с полной обработкой вложенных ссылок"""
@@ -69,7 +90,7 @@ def format_type(schema):
 
 def get_description(node):
     """Извлекает описание с fallback на title"""
-    return node.get('description') or node.get('title', '')
+    return node.get('description') or node.get('title', '') or ""
 
 def get_examples(node):
     """Извлекает все примеры из узла"""
@@ -83,19 +104,39 @@ def get_examples(node):
     if 'examples' in node:
         if isinstance(node['examples'], dict):
             for name, example_data in node['examples'].items():
-                if 'value' in example_data:
+                if isinstance(example_data, dict) and 'value' in example_data:
                     summary = example_data.get('summary', name)
                     examples.append((summary, example_data['value']))
                 elif isinstance(example_data, dict) and 'value' not in example_data:
                     # Обработка случая, когда пример представлен напрямую
                     examples.append((name, example_data))
+                else:
+                    # Простое значение
+                    examples.append((name, example_data))
         elif isinstance(node['examples'], list) and node['examples']:
             for i, example in enumerate(node['examples']):
                 examples.append((f"Пример {i+1}", example))
     
+    # Примеры из схемы (для параметров с schema)
+    if 'schema' in node and isinstance(node['schema'], dict):
+        schema = node['schema']
+        if 'example' in schema:
+            examples.append(('Пример', schema['example']))
+        if 'examples' in schema:
+            if isinstance(schema['examples'], dict):
+                for name, example_data in schema['examples'].items():
+                    if isinstance(example_data, dict) and 'value' in example_data:
+                        summary = example_data.get('summary', name)
+                        examples.append((summary, example_data['value']))
+                    else:
+                        examples.append((name, example_data))
+            elif isinstance(schema['examples'], list):
+                for i, example in enumerate(schema['examples']):
+                    examples.append((f"Пример {i+1}", example))
+        
     return examples
 
-def format_example(example, max_length=100):
+def format_example(example, max_length=150):
     """Форматирует пример для вывода"""
     if example is None:
         return ""
@@ -158,279 +199,199 @@ def collect_used_schemas(spec, node, collected):
             collect_used_schemas(spec, item, collected)
 
 def generate_parameters_table(parameters, spec):
-    """Генерирует таблицу параметров с улучшенной обработкой примеров"""
+    """Генерирует таблицу параметров через шаблон"""
     if not parameters:
         return ""
     
-    headers = [
-        "Имя", "Тип", "Расположение", "Обязательный", 
-        "Описание", "Примеры", "Формат"
-    ]
-    table = [
-        f"| {' | '.join(headers)} |",
-        f"|{'-:|' * len(headers)}"
-    ]
-    
+    # Подготовка данных для шаблона
+    params_data = []
     for param in parameters:
         # Обработка ссылок
         resolved_param = param.copy()
-        if 'schema' in param:
+        if 'schema' in param and param['schema']:
             resolved_param['schema'] = process_schema(spec, param['schema'])
         
-        # Форматирование типа
-        param_type = format_type(resolved_param['schema'])
-        
-        # Извлечение ВСЕХ примеров
-        examples = get_examples(resolved_param)
-        example_str = ""
-        if examples:
-            example_str = "<br>".join(
-                f"**{name}:** `{format_example(ex, 50)}`" 
-                for name, ex in examples
-            )
-        
-        # Форматирование описания с HTML-переносами
+        # Получение описания с защитой от None
         description = get_description(resolved_param)
-        if description:
-            description = description.replace('\n', '<br>').replace('  - ', '<br>- ')
         
-        row = [
-            f"`{resolved_param['name']}`",
-            param_type,
-            resolved_param['in'],
-            "✅" if resolved_param.get('required', False) else "❌",
-            description or "",
-            example_str,
-            resolved_param.get('schema', {}).get('format', '')
-        ]
-        table.append("| " + " | ".join(row) + " |")
+        params_data.append({
+            'name': resolved_param.get('name', ''),
+            'type': format_type(resolved_param.get('schema', {})) if 'schema' in resolved_param else '',
+            'in': resolved_param.get('in', ''),
+            'required': "✅" if resolved_param.get('required', False) else "❌",
+            'description': description,
+            'examples': get_examples(resolved_param),
+            'format': resolved_param.get('schema', {}).get('format', '') if 'schema' in resolved_param else ''
+        })
     
-    return "\n".join(table)
+    template = env.get_template('parameters_table.md.j2')
+    # Передаем spec в шаблон
+    return template.render(parameters=params_data, spec=spec)
 
 def generate_request_body(body, spec):
-    """Генерирует описание тела запроса с улучшенной обработкой схем"""
+    """Генерирует описание тела запроса через шаблон"""
     if not body:
         return ""
     
-    result = ["**Тело запроса:**"]
-    
-    # Добавлено описание тела
-    if 'description' in body:
-        desc = body['description'].replace('\n', '  \n')
-        result.append(f"**Описание:** {desc}")
+    body_data = {
+        'description': body.get('description', ''),
+        'content': []
+    }
     
     for content_type, media in body.get('content', {}).items():
-        result.append(f"- **Тип контента:** `{content_type}`")
+        content = {'content_type': content_type}
         
-        if 'schema' in media:
+        if 'schema' in media and media['schema']:
             original_schema = media['schema']
-            schema = process_schema(spec, original_schema)
+            schema = process_schema(spec, original_schema) if original_schema else {}
             
-            # Вывод информации о схеме
             if '$ref' in original_schema:
                 ref_name = original_schema['$ref'].split('/')[-1]
-                # Пытаемся получить заголовок схемы
-                title = ""
                 try:
                     ref_schema = resolve_ref(spec, original_schema['$ref'])
-                    title = ref_schema.get('title', '')
+                    content['schema_title'] = ref_schema.get('title', '')
                 except Exception:
-                    pass
-                display_name = title or ref_name
-                result.append(f"- **Схема:** [{display_name}](#{ref_name.lower()})")
+                    content['schema_title'] = ''
+                content['schema_ref'] = ref_name
             else:
-                result.append(f"- **Тип:** {format_type(schema)}")
+                content['schema_type'] = format_type(schema) if schema else ''
             
-            # Генерация таблицы свойств
-            if schema.get('type') == 'object' and 'properties' in schema:
-                result.append("**Свойства:**")
+            # Обработка свойств объектов
+            if schema and schema.get('type') == 'object' and 'properties' in schema:
+                content['properties'] = []
                 required_fields = schema.get('required', [])
                 
-                props_table = [
-                    "| Имя | Тип | Обязательный | Описание | Примеры | Формат |",
-                    "|-----|-----|--------------|----------|---------|--------|"
-                ]
-                
                 for prop_name, prop in schema['properties'].items():
-                    # Обработка вложенных ссылок и типов
+                    if prop is None:
+                        continue
+                        
                     prop = process_schema(spec, prop)
-                    
-                    # Извлечение ВСЕХ примеров
-                    examples = get_examples(prop)
-                    example_str = ""
-                    if examples:
-                        example_str = "<br>".join(
-                            f"**{name}:** `{format_example(ex, 30)}`" 
-                            for name, ex in examples
-                        )
-                    
-                    # Форматирование описания с HTML-переносами
-                    description = get_description(prop)
-                    if description:
-                        description = description.replace('\n', '<br>').replace('  - ', '<br>- ')
-                    
-                    props_table.append(
-                        f"| `{prop_name}` | {format_type(prop)} | "
-                        f"{'✅' if prop_name in required_fields else '❌'} | "
-                        f"{description or ''} | "
-                        f"{example_str} | "
-                        f"{prop.get('format', '')} |"
-                    )
-                
-                result.append("\n".join(props_table))
+                    content['properties'].append({
+                        'name': prop_name,
+                        'type': format_type(prop) if prop else '',
+                        'required': '✅' if prop_name in required_fields else '❌',
+                        'description': get_description(prop),
+                        'examples': get_examples(prop),
+                        'format': prop.get('format', '') if prop else ''
+                    })
         
-        # Добавлена обработка примеров
-        examples = get_examples(media)
-        if examples:
-            for name, example in examples:
-                example_str = format_example(example, 200)
-                result.append(f"- **Пример ({name}):**\n```json\n{example_str}\n```")
+        content['examples'] = get_examples(media)
+        body_data['content'].append(content)
     
-    return "\n".join(result)
+    template = env.get_template('request_body.md.j2')
+    # Передаем spec в шаблон
+    return template.render(body=body_data, spec=spec)
 
 def generate_responses(responses, spec):
-    """Генерирует описание ответов с улучшенной детализацией"""
+    """Генерирует описание ответов через шаблон"""
     if not responses:
         return ""
     
-    result = ["**Ответы:**"]
+    responses_data = []
     for code, response in responses.items():
-        # Форматирование описания с переносами
-        description = response.get('description', '')
-        if description:
-            description = description.replace('\n', '  \n')
-        result.append(f"##### **Код {code}:** {description}")
+        if response is None:
+            continue
+            
+        response_data = {
+            'code': code,
+            'description': response.get('description', ''),
+            'content': []
+        }
         
         for content_type, media in response.get('content', {}).items():
-            result.append(f"  - **Тип контента:** `{content_type}`")
-            
-            if 'schema' in media:
-                schema = media['schema']
-                schema_type = format_type(schema)
+            if media is None:
+                continue
                 
+            content = {'content_type': content_type}
+            
+            if 'schema' in media and media['schema']:
+                schema = media['schema']
                 if '$ref' in schema:
                     ref_name = schema['$ref'].split('/')[-1]
-                    # Получаем заголовок схемы из компонентов
-                    title = ""
                     try:
                         schema_ref = resolve_ref(spec, schema['$ref'])
-                        title = schema_ref.get('title', '')
+                        content['schema_title'] = schema_ref.get('title', '')
                     except Exception:
-                        pass
-                    display_name = title or ref_name
-                    result.append(f"  - **Схема:** [{display_name}](#{ref_name.lower()})")
+                        content['schema_title'] = ''
+                    content['schema_ref'] = ref_name
                 else:
-                    result.append(f"  - **Тип:** {schema_type}")
+                    content['schema_type'] = format_type(schema)
             
-            # Добавлена обработка примеров
-            examples = get_examples(media)
-            if examples:
-                for name, example in examples:
-                    example_str = format_example(example)
-                    result.append(f"###### **Пример ({name}):**\n```json\n{example_str}\n```")
+            content['examples'] = get_examples(media)
+            response_data['content'].append(content)
+        
+        responses_data.append(response_data)
     
-    return "\n".join(result)
+    template = env.get_template('responses.md.j2')
+    # Передаем spec в шаблон
+    return template.render(responses=responses_data, spec=spec)
 
 def generate_schemas(spec, used_schemas=None):
-    """Генерирует раздел со схемами данных с полной информацией"""
+    """Генерирует раздел со схемами данных через шаблон"""
     schemas = spec.get('components', {}).get('schemas', {})
     if not schemas:
         return ""
     
-    # Фильтрация схем
     if used_schemas is not None:
         schemas = {name: schema for name, schema in schemas.items() if name in used_schemas}
     
     if not schemas:
         return ""
     
-    result = ["---", "## 📖 Схемы данных"]
+    schemas_data = []
     for name, schema in schemas.items():
-        result.append(f"### {name}")
-        
-        # Вывод заголовка схемы
-        if 'title' in schema:
-            result.append(f" - **Название:** {schema['title']}")
-        
-        # Тип схемы
-        result.append(f" - **Тип:** `{schema.get('type', 'object')}`")
-        
-        # Описание схемы
-        if 'description' in schema:
-            description = schema['description']
-            if description:
-                description = description.replace('\n', '  \n')
-            result.append(f" - **Описание:** {description}")
-        
-        # Вывод обязательных полей
-        if 'required' in schema:
-            result.append(f" - **Обязательные поля:** `{', '.join(schema['required'])}`")
+        if schema is None:
+            continue
+            
+        schema_data = {
+            'name': name,
+            'title': schema.get('title', ''),
+            'type': schema.get('type', 'object'),
+            'description': schema.get('description', ''),
+            'required_fields': schema.get('required', []),
+            'properties': [],
+            'example': schema.get('example', None)
+        }
         
         if 'properties' in schema:
-            result.append("#### **Свойства:**")
-            props_table = [
-                "| Имя | Тип | Обязательный | Описание | Примеры | Формат |",
-                "|-----|-----|--------------|----------|---------|--------|"
-            ]
-            
             required_fields = schema.get('required', [])
             
             for prop_name, prop in schema['properties'].items():
-                # Обработка вложенных ссылок и типов
+                if prop is None:
+                    continue
+                    
                 prop = process_schema(spec, prop)
-                
-                # Извлечение ВСЕХ примеров
-                examples = get_examples(prop)
-                example_str = ""
-                if examples:
-                    example_str = "<br>".join(
-                        f"**{name}:** `{format_example(ex, 30)}`" 
-                        for name, ex in examples
-                    )
-                
-                # Форматирование описания с HTML-переносами
-                description = get_description(prop)
-                if description:
-                    description = description.replace('\n', '<br>').replace('  - ', '<br>- ')
-                
-                props_table.append(
-                    f"| `{prop_name}` | {format_type(prop)} | "
-                    f"{'✅' if prop_name in required_fields else '❌'} | "
-                    f"{description or ''} | "
-                    f"{example_str} | "
-                    f"{prop.get('format', '')} |"
-                )
-            
-            result.append("\n".join(props_table))
+                schema_data['properties'].append({
+                    'name': prop_name,
+                    'type': format_type(prop) if prop else '',
+                    'required': '✅' if prop_name in required_fields else '❌',
+                    'description': get_description(prop),
+                    'examples': get_examples(prop),
+                    'format': prop.get('format', '') if prop else ''
+                })
         
-        # Вывод примера всей схемы
-        if 'example' in schema:
-            example = schema['example']
-            if isinstance(example, dict):
-                example_str = json.dumps(example, indent=2, ensure_ascii=False)
-                result.append(f"**Пример:**\n```json\n{example_str}\n```")
-            elif example:
-                result.append(f"**Пример:**\n```\n{example}\n```")
-        
-        result.append("")
+        schemas_data.append(schema_data)
     
-    return "\n".join(result)
+    template = env.get_template('schemas.md.j2')
+    # Передаем spec в шаблон
+    return template.render(schemas=schemas_data, spec=spec)
 
 def generate_markdown(spec, endpoints_filter=None, include_all_schemas=False):
     """Генерирует Markdown документацию из OpenAPI-спецификации"""
-    output = [
-        f"# {spec['info']['title']}",
-        f"**Версия:** {spec['info']['version']}",
-        f"**Описание:** {spec['info'].get('description', '')}",
-        "---",
-        "## 🚀 Эндпоинты"
-    ]
+    # Подготовка данных для основного шаблона
+    context = {
+        'title': spec['info']['title'],
+        'version': spec['info']['version'],
+        'description': spec['info'].get('description', ''),
+        'endpoints_by_tag': defaultdict(list),
+        'schemas_section': '',
+        'spec': spec  # Ключевое исправление: передаем spec в основной шаблон
+    }
     
     # Собираем все используемые схемы
     used_schemas = set() if not include_all_schemas else None
     
     # Группировка эндпоинтов по тегам
-    endpoints_by_tag = defaultdict(list)
     for path, methods in spec['paths'].items():
         for method, details in methods.items():
             if method.lower() not in ['get', 'post', 'put', 'delete', 'patch', 'head', 'options']:
@@ -444,66 +405,28 @@ def generate_markdown(spec, endpoints_filter=None, include_all_schemas=False):
             if include_endpoint:
                 tags = details.get('tags', ['Без тега'])
                 for tag in tags:
-                    endpoints_by_tag[tag].append((path, method, details))
+                    endpoint_data = {
+                        'path': path,
+                        'method': method.upper(),
+                        'details': details,
+                        'parameters_table': generate_parameters_table(details.get('parameters', []), spec),
+                        'request_body': generate_request_body(details.get('requestBody', {}), spec) if 'requestBody' in details else "",
+                        'responses': generate_responses(details.get('responses', {}), spec) if 'responses' in details else ""
+                    }
+                    context['endpoints_by_tag'][tag].append(endpoint_data)
                 
-                # Сбор схем из параметров (если не включены все схемы)
+                # Сбор схем
                 if not include_all_schemas:
                     for param in details.get('parameters', []):
                         collect_used_schemas(spec, param, used_schemas)
-                    
-                    # Сбор схем из тела запроса
                     if 'requestBody' in details:
                         collect_used_schemas(spec, details['requestBody'], used_schemas)
-                    
-                    # Сбор схем из ответов
                     for response in details.get('responses', {}).values():
                         collect_used_schemas(spec, response, used_schemas)
     
-    # Генерация документации по тегам
-    for tag, endpoints in endpoints_by_tag.items():
-        output.append(f"### {tag}")
-        
-        for path, method, details in endpoints:
-            # Заголовок эндпоинта
-            output.append(f"#### `{method.upper()}` {path}")
-            if details.get('deprecated', False):
-                output.append("> ⚠️ **Устарел**")
-            
-            # Вывод operationId
-            if 'operationId' in details:
-                output.append(f"**ID операции:** `{details['operationId']}`")
-            
-            # Улучшенное описание (summary + description)
-            summary = details.get('summary', '')
-            description = details.get('description', '')
-            
-            if summary and description:
-                output.append(f"**Описание:** {summary}  \n{description}")
-            elif summary:
-                output.append(f"**Описание:** {summary}")
-            elif description:
-                output.append(f"**Описание:** {description}")
-            
-            # Параметры
-            params = details.get('parameters', [])
-            if params:
-                output.append(generate_parameters_table(params, spec))
-            
-            # Тело запроса
-            request_body = details.get('requestBody', {})
-            if request_body:
-                output.append(generate_request_body(request_body, spec))
-            
-            # Ответы
-            responses = details.get('responses', {})
-            if responses:
-                output.append(generate_responses(responses, spec))
-            
-            output.append("---")
+    # Генерация секции схем
+    context['schemas_section'] = generate_schemas(spec, used_schemas)
     
-    # Схемы данных
-    schemas_section = generate_schemas(spec, used_schemas)
-    if schemas_section:
-        output.append(schemas_section)
-    
-    return "\n\n".join(output)
+    # Рендеринг основного шаблона
+    template = env.get_template('base.md.j2')
+    return template.render(context)
