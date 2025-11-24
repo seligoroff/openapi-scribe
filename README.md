@@ -51,7 +51,7 @@ python cli.py [COMMAND] [OPTIONS]
 |---------|----------|
 |endpoint|	Информация о конкретном эндпоинте|
 |schema|	Поиск схемы данных по имени|
-|list|	Список всех эндпоинтов API (с опциями --summary, --group-by-tags)|
+|list|	Список всех эндпоинтов API (с опциями --summary, --group-by-tags, --stats)|
 |generate-md|	Генерация Markdown документации|
 
 #### 1. Поиск информации об эндпоинте
@@ -96,7 +96,8 @@ python cli.py list \
   -s path/to/openapi.json \
   -o endpoints.txt \
   --summary \
-  --group-by-tags
+  --group-by-tags \
+  --stats
 
 ```
 
@@ -106,6 +107,7 @@ python cli.py list \
 - --output/-o: Файл для сохранения (опционально)
 - --summary: Показать краткое описание (summary) для каждого эндпоинта
 - --group-by-tags: Группировать эндпоинты по тегам
+- --stats: Показать статистику по API (количество эндпоинтов, методы, версии и т.д.)
 
 **Примеры:**
 
@@ -121,6 +123,12 @@ python cli.py list -s spec.json --group-by-tags
 
 # Группировка с описанием
 python cli.py list -s spec.json --group-by-tags --summary
+
+# Только статистика
+python cli.py list -s spec.json --stats
+
+# Статистика с группировкой по тегам
+python cli.py list -s spec.json --stats --group-by-tags
 ```
 
 #### 4. Генерация Markdown документации
