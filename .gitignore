@@ -1,8 +1,58 @@
 .spyproject
-__pycache__
 
-# Coverage
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Testing
+.pytest_cache/
+.tox/
+.hypothesis/
+*.cover
 .coverage
 .coverage.*
 htmlcov/
-*.cover
+.cache
+nosetests.xml
+coverage.xml
+*.log
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+.eggs/
+*.egg
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Ruff
+.ruff_cache/
+
+# Environment variables
+.env
+.env.local
+.env.*.local

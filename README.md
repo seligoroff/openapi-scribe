@@ -18,9 +18,8 @@
 1. Клонируйте репозиторий:
 
 ```bash
-git clone git@gitlab.fc-zenit.ru:zenit/oascribe.git
-cd oascribe
-
+git clone git@github.com:seligoroff/openapi-scribe.git
+cd openapi-scribe
 ```
 2. Установите зависимости:
 
